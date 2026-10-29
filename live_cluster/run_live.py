@@ -440,18 +440,8 @@ def main():
                 if res_bid.get("code") == "0":
                     action_desc.append(f"BID_POST({bid_px})")
                     ord_data = res_bid.get("data", [{}])[0]
-                    # order placed, not filled yet
-                    recent_fills.append({
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "side": "BUY",
-                        "price": bid_px,
-                        "sz": kernel.lot_sz,
-                        "clOrdId": cl_id_bid,
-                        "ordId": ord_data.get("ordId"),
-                        "type": "MAKER_BID",
-                        "mid": mid_price,
-                        "r": round(r, 1)
-                    })
+                    # 严格真实记账：挂单仅记录为活动挂单，绝不作为成交追加！
+                    action_desc.append(f"BID_ORDER_OPEN({ord_data.get('ordId')})")
                 else:
                     action_desc.append(f"BID_FAIL({res_bid.get('msg')})")
             else:
@@ -472,18 +462,8 @@ def main():
                 if res_ask.get("code") == "0":
                     action_desc.append(f"ASK_POST({ask_px})")
                     ord_data = res_ask.get("data", [{}])[0]
-                    # order placed, not filled yet
-                    recent_fills.append({
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "side": "SELL",
-                        "price": ask_px,
-                        "sz": kernel.lot_sz,
-                        "clOrdId": cl_id_ask,
-                        "ordId": ord_data.get("ordId"),
-                        "type": "MAKER_ASK",
-                        "mid": mid_price,
-                        "r": round(r, 1)
-                    })
+                    # 严格真实记账：挂单仅记录为活动挂单，绝不作为成交追加！
+                    action_desc.append(f"ASK_ORDER_OPEN({ord_data.get('ordId')})")
                 else:
                     action_desc.append(f"ASK_FAIL({res_ask.get('msg')})")
             else:
@@ -492,16 +472,6 @@ def main():
 
             # 7. Write telemetry status and recent fills
                         # Query real account fills to count true executed trades
-            try:
-                bills_res = client._sign_and_request('GET', '/api/v5/account/bills', {'instType': 'SWAP', 'limit': '20'})
-                real_bills = bills_res.get('data', [])
-                valid_trades = [b for b in real_bills if b.get('subType') in ['1', '2']]
-                if valid_trades:
-                    kernel.total_matched_trades = len(valid_trades)
-            except Exception:
-                pass
-
-                        # True trade execution reconciliation via bills
             try:
                 bills_res = client._sign_and_request('GET', '/api/v5/account/bills', {'instType': 'SWAP', 'limit': '20'})
                 real_bills = bills_res.get('data', [])
