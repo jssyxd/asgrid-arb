@@ -4,7 +4,6 @@
 
 <p>
   <img alt="python"   src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white">
-  <img alt="engine"   src="https://img.shields.io/badge/Avellaneda--Stoikov-2008-6f42c1">
   <img alt="model"    src="https://img.shields.io/badge/LightGBM-toxicity%20gate-9ACD32">
   <img alt="exchange" src="https://img.shields.io/badge/Exchange-OKX%20%C2%B7%20Hyperliquid%20%C2%B7%20Bybit-black">
   <img alt="status"   src="https://img.shields.io/badge/Live-2345%20fills%20%C2%B7%20%2B1920%20USDT-brightgreen">
