@@ -318,6 +318,26 @@ def compute_funding_target_inventory(self, funding_rate: float, sigma: float) ->
 inventory_skew = (self.inventory - q_star) * self.gamma * (sigma ** 2) * mid_price * 0.001 * t_left
 ```
 
+**形式化定义（工作内容 3 标准写法）**
+
+目标存货偏置：
+
+$$q^{*}(F_t) = -\mathrm{sign}(F_t) \cdot \min\left( Q_{\max},\; k_f \cdot \frac{|F_t| - F_{\text{base}}}{\sigma_{1m}^{2}} \right)$$
+
+预约价格偏移：
+
+$$r(s, q, t) = s_{\text{micro}} - \gamma \, \sigma_{1m}^{2} \left( q - q^{*}(F_t) \right) + \beta \cdot \text{CVD}_{zscore}$$
+
+**状态解读**
+
+- $F_t$ 为极高正费率（多付空，如年化 50%+）时，$q^{*} < 0$：系统**主动把目标存货偏置为空头**。
+- 当实际存货 $q > q^{*}$（空头还没建够）时，公式自动大幅**下调** $r$，促使 **Ask 挂单极贴近盘口甚至加厚挂单**以快速成交卖单建立空仓；同时 **Bid 挂单拉宽**避免接买单。
+- $\beta \cdot \text{CVD}_{zscore}$ 项保证在散户猛烈买入时整体报价上移，不被顺势扫穿。
+
+**为什么必须先看 CVD 再吃费率（防穿仓）**
+
+资金费率高往往正是因为散户在猛烈买入。如果 1m CVD 持续正斜率拉升，**坚决不能无脑挂单做空**；只有当 CVD 出现增速放缓（动量衰减或顶背离）时，再贴盘口吃费率挂单。
+
 **阶段 2 · CVD 动量衰竭确认门控**（2 ~ 3 周）
 
 资金费率高往往是因为散户在猛买，此时做空建仓极度危险，必须等待 CVD 动量衰减：
