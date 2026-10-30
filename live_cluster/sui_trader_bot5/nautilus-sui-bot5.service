@@ -1,0 +1,17 @@
+[Unit]
+Description=NautilusTrader Live MM SUI-USDT (accountbot5)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nautilus_cluster/services/03_as_grid_sui_accountbot5
+ExecStart=/opt/nautilus_cluster/venv/bin/python /opt/nautilus_cluster/services/03_as_grid_sui_accountbot5/run_sui.py
+Restart=always
+RestartSec=5
+MemoryMax=350M
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONMALLOC=malloc
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=NautilusTrader Live MM SOL-USDT (accountbot2)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nautilus_cluster/services/01_as_grid_sol_accountbot2
+ExecStart=/opt/nautilus_cluster/venv/bin/python /opt/nautilus_cluster/services/01_as_grid_sol_accountbot2/run_sol.py
+Restart=always
+RestartSec=5
+MemoryMax=350M
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONMALLOC=malloc
+
+[Install]
+WantedBy=multi-user.target

@@ -80,3 +80,39 @@ cd live_cluster && docker compose up -d
 # 3. 运行 10 分钟财务与盈亏监控
 python3 live_cluster/cron_hot_monitor.py 1
 ```
+
+---
+
+## 四、 多币种独立交易集群架构 (SOL / DOGE / SUI)
+
+系统已在生产 VPS（Debian 12 + 2GB 持久化 Swap + Python 3.11 + NautilusTrader 1.221.0）上实现了三大独立资产的物理隔离高频做市：
+
+```
+live_cluster/
+├── shared/                              # 共享高性能网关与通用状态机
+│   ├── gateway_okx_client.py           # 强制 IPv4、Keep-Alive、Chrome UA、OKX HMAC 签名
+│   └── okx_ws_manager.py               # 原生全双工 WebSocket (books5 深度 + orders 真实成交)
+│
+├── sol_trader_bot2/                    # 实例 1: SOL-USDT (accountbot2, 40U 3x)
+│   ├── run_sol.py                      # Stoikov 微观价 + Top-5 OFI + 动态 Gamma (0.35/1.20) + 8 bps 价差
+│   ├── config/accountbot2_credentials.env.example
+│   ├── nautilus-sol-bot2.service       # Systemd 守护单元 (MemoryMax=350M)
+│   └── README.md
+│
+├── doge_trader_bot4/                   # 实例 2: DOGE-USDT (accountbot4, 30U 3x)
+│   ├── run_doge.py                     # 量能加速度门控 (Vol/MA20 > 2.5) + 12 bps 肥尾吸收
+│   ├── config/accountbot4_credentials.env.example
+│   ├── nautilus-doge-bot4.service      # Systemd 守护单元 (MemoryMax=350M)
+│   └── README.md
+│
+└── sui_trader_bot5/                    # 实例 3: SUI-USDT (accountbot5, 30U 3x)
+    ├── run_sui.py                      # 8h 资金费率 Carry 偏置 + 10 bps 价差 + 无冷却即时流转
+    ├── config/accountbot5_credentials.env.example
+    ├── nautilus-sui-bot5.service       # Systemd 守护单元 (MemoryMax=350M)
+    └── README.md
+```
+
+### 差异化风控与模型特性
+1. **SOL-USDT (`accountbot2`)**：单笔 0.10 张，最大持仓 0.40 张。微观价格与订单流加权，低波 $\gamma=0.35$，高波 $\gamma=1.20$，最小价差 8.0 bps，价格容差 $\pm 0.03\text{ USDT}$。
+2. **DOGE-USDT (`accountbot4`)**：单笔 0.10 张（100 DOGE），最大持仓 0.40 张。量能加速度门控 $\text{Vol}/\text{MA}_{20}(\text{Vol}) > 2.5$ 阻断突破飞刀，最小价差 12.0 bps，价格容差 $\pm 0.00005\text{ USDT}$。
+3. **SUI-USDT (`accountbot5`)**：单笔 10 张（10 SUI），最大持仓 40 张。8h 资金费率 Carry 偏置补偿保留价格，已解除 5 秒冷却限制，支持高频即时撮合，最小价差 10.0 bps，价格容差 $\pm 0.0005\text{ USDT}$。
