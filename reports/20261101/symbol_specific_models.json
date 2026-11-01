@@ -1,0 +1,137 @@
+{
+  "WOO": {
+    "symbol": "WOO-USDT-SWAP",
+    "model_file": "W:/database/04_models\\lgbm_toxicity_gate_WOO.txt",
+    "train_samples": 1407,
+    "test_samples": 555,
+    "auc_out_of_sample": 0.8198848464619493,
+    "precision_out_of_sample": 0.8571428571428571,
+    "recall_out_of_sample": 0.056074766355140186,
+    "brier_score": 0.1176722802308872,
+    "top_features": [
+      "spread_bps",
+      "vol_30s",
+      "ofi_30s"
+    ],
+    "feature_importances_gain": {
+      "spread_bps": 3895.3858771324158,
+      "vol_30s": 710.0203187465668,
+      "ofi_30s": 316.3168594837189,
+      "micro_skew": 255.54833221435547,
+      "ofi_1s": 153.10642910003662,
+      "ofi_5s": 40.03213953971863,
+      "volume": 31.283880710601807,
+      "obi": 20.808810234069824,
+      "trade_count": 9.480999946594238,
+      "net_flow": 0.0
+    }
+  },
+  "CORE": {
+    "symbol": "CORE-USDT-SWAP",
+    "model_file": "W:/database/04_models\\lgbm_toxicity_gate_CORE.txt",
+    "train_samples": 1804,
+    "test_samples": 752,
+    "auc_out_of_sample": 0.7670251784298175,
+    "precision_out_of_sample": 0.8347107438016529,
+    "recall_out_of_sample": 0.2603092783505155,
+    "brier_score": 0.2176088549766195,
+    "top_features": [
+      "spread_bps",
+      "vol_30s",
+      "ofi_30s"
+    ],
+    "feature_importances_gain": {
+      "spread_bps": 2957.8991713523865,
+      "vol_30s": 247.4859790802002,
+      "ofi_30s": 90.07894992828369,
+      "micro_skew": 84.57860851287842,
+      "obi": 45.20782995223999,
+      "ofi_5s": 43.69713020324707,
+      "ofi_1s": 31.901599884033203,
+      "volume": 18.325900077819824,
+      "trade_count": 0.0,
+      "net_flow": 0.0
+    }
+  },
+  "BERA": {
+    "symbol": "BERA-USDT-SWAP",
+    "model_file": "W:/database/04_models\\lgbm_toxicity_gate_BERA.txt",
+    "train_samples": 1917,
+    "test_samples": 702,
+    "auc_out_of_sample": 0.8691456414915142,
+    "precision_out_of_sample": 0.978494623655914,
+    "recall_out_of_sample": 0.2983606557377049,
+    "brier_score": 0.17073274164364685,
+    "top_features": [
+      "spread_bps",
+      "vol_30s",
+      "micro_skew"
+    ],
+    "feature_importances_gain": {
+      "spread_bps": 5212.353935241699,
+      "vol_30s": 694.1220874786377,
+      "micro_skew": 342.8197693824768,
+      "ofi_30s": 315.06118965148926,
+      "ofi_5s": 140.89029788970947,
+      "ofi_1s": 20.68027973175049,
+      "obi": 0.0,
+      "volume": 0.0,
+      "trade_count": 0.0,
+      "net_flow": 0.0
+    }
+  },
+  "SOPH": {
+    "symbol": "SOPH-USDT-SWAP",
+    "model_file": "W:/database/04_models\\lgbm_toxicity_gate_SOPH.txt",
+    "train_samples": 4691,
+    "test_samples": 1890,
+    "auc_out_of_sample": 0.7691082314738229,
+    "precision_out_of_sample": 0.8871794871794871,
+    "recall_out_of_sample": 0.3285849952516619,
+    "brier_score": 0.21184899907768187,
+    "top_features": [
+      "spread_bps",
+      "vol_30s",
+      "micro_skew"
+    ],
+    "feature_importances_gain": {
+      "spread_bps": 6162.5994420051575,
+      "vol_30s": 918.2585854530334,
+      "micro_skew": 237.4769687652588,
+      "ofi_1s": 141.35111951828003,
+      "ofi_30s": 138.057391166687,
+      "ofi_5s": 62.21958017349243,
+      "net_flow": 16.329519748687744,
+      "obi": 0.0,
+      "volume": 0.0,
+      "trade_count": 0.0
+    }
+  },
+  "AKE": {
+    "symbol": "AKE-USDT-SWAP",
+    "model_file": "W:/database/04_models\\lgbm_toxicity_gate_AKE.txt",
+    "train_samples": 2508,
+    "test_samples": 957,
+    "auc_out_of_sample": 0.8971113693149056,
+    "precision_out_of_sample": 0.8885017421602788,
+    "recall_out_of_sample": 0.5391120507399577,
+    "brier_score": 0.1438879821436283,
+    "top_features": [
+      "spread_bps",
+      "vol_30s",
+      "ofi_1s"
+    ],
+    "feature_importances_gain": {
+      "spread_bps": 12115.68502664566,
+      "vol_30s": 728.6704235076904,
+      "ofi_1s": 383.69868898391724,
+      "obi": 324.7100238800049,
+      "trade_count": 256.0052390098572,
+      "ofi_5s": 184.0436511039734,
+      "ofi_30s": 149.58418035507202,
+      "net_flow": 60.64290952682495,
+      "volume": 46.052509784698486,
+      "micro_skew": 40.70390033721924
+    }
+  }
+}

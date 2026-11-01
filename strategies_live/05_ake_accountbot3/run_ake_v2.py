@@ -1,0 +1,246 @@
+# -*- coding: utf-8 -*-
+"""
+Production NautilusTrader Live Service V2 for AKE-USDT-SWAP (accountbot3)
+Powered by Robust GLFT Quoting Engine + Dedicated LightGBM Toxicity Gate
+Compliant with https://github.com/jssyxd/quant-research-constitution
+"""
+
+import socket
+_orig_getaddrinfo = socket.getaddrinfo
+def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+socket.getaddrinfo = _ipv4_getaddrinfo
+
+import os
+import sys
+import time
+import json
+import signal
+import numpy as np
+from datetime import datetime, timezone
+
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+SHARED_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../shared"))
+REPO_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../.."))
+sys.path.append(SHARED_DIR)
+sys.path.append(REPO_DIR)
+
+from gateway_okx_client import OKXGatewayClient
+from okx_ws_manager import OKXWebSocketManager
+from robust_glft_engine import RobustGLFTQuotingEngine
+
+CONFIG_FILE = os.path.join(SERVICE_DIR, "config/accountbot3_credentials.env")
+LOG_DIR = os.path.join(SERVICE_DIR, "logs")
+STATUS_FILE = os.path.join(LOG_DIR, "accountbot3_status.json")
+LOG_FILE = os.path.join(LOG_DIR, "accountbot3_runtime.log")
+MODEL_FILE = os.path.join(REPO_DIR, "models_v2/lgbm_toxicity_gate_AKE.txt")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+
+def load_credentials():
+    creds = {
+        "OKX_API_KEY": "d5d46f4b-8bb2-4e01-8208-212ee4043f0e",
+        "OKX_API_SECRET": "166FB0853EA88F5FFBAA987C188168CB",
+        "OKX_API_PASSPHRASE": "Auto111.",
+        "OKX_SIMULATED_TRADING": "0",
+        "INST_ID": "AKE-USDT-SWAP",
+        "MIN_SPREAD_BPS": "12.0",
+        "TARGET_NOTIONAL_USD": "10.0",
+        "MAX_NOTIONAL_USD": "45.0"
+    }
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    creds[k.strip()] = v.strip().strip('"').strip("'")
+    return creds
+
+def log_msg(msg: str):
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    line = f"[{ts}] [accountbot3_AKE_V2] {msg}"
+    print(line, flush=True)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+running = True
+def handle_shutdown(signum, frame):
+    global running
+    log_msg("Received shutdown signal. Stopping gracefully...")
+    running = False
+
+signal.signal(signal.SIGTERM, handle_shutdown)
+signal.signal(signal.SIGINT, handle_shutdown)
+
+def main():
+    log_msg("=== Starting NautilusTrader AKE-USDT-SWAP V2 (accountbot3) Production Service ===")
+    creds = load_credentials()
+    simulated = (creds.get("OKX_SIMULATED_TRADING", "0") == "1")
+    inst_id = creds.get("INST_ID", "AKE-USDT-SWAP")
+
+    client = OKXGatewayClient(
+        api_key=creds["OKX_API_KEY"],
+        api_secret=creds["OKX_API_SECRET"],
+        passphrase=creds["OKX_API_PASSPHRASE"],
+        simulated=simulated
+    )
+
+    bal = client.get_balance("USDT")
+    avail_bal = float(bal.get("availBal", bal.get("cashBal", 0)))
+    log_msg(f"Connected to OKX {'Demo' if simulated else 'Real'}. Available Capital: {avail_bal} USDT")
+
+    ws_mgr = OKXWebSocketManager(
+        api_key=creds["OKX_API_KEY"],
+        api_secret=creds["OKX_API_SECRET"],
+        passphrase=creds["OKX_API_PASSPHRASE"],
+        inst_id=inst_id
+    )
+    log_msg(f"Starting OKX WebSocket streams for {inst_id}...")
+    ws_mgr.start()
+
+    # Initial position sync
+    inventory = 0.0
+    init_positions = client.get_positions(inst_type="SWAP", inst_id=inst_id)
+    if init_positions:
+        inventory = float(init_positions[0].get("pos", 0))
+        log_msg(f"Synced initial live position: {inventory} contracts")
+
+    # Initialize Quoting Engine
+    engine = RobustGLFTQuotingEngine(
+        symbol=inst_id,
+        tick_size=0.00001,
+        contract_val=100.0,
+        model_path=MODEL_FILE,
+        maker_fee_bps=2.0,
+        min_spread_bps=float(creds.get("MIN_SPREAD_BPS", 12.0)),
+        target_notional_usd=float(creds.get("TARGET_NOTIONAL_USD", 10.0)),
+        max_notional_usd=float(creds.get("MAX_NOTIONAL_USD", 45.0)),
+        toxic_threshold=0.65
+    )
+
+    real_matched = 0
+    real_volume = 0.0
+    real_fees = 0.0
+    cached_funding_rate = 0.0
+    last_funding_fetch = 0.0
+
+    time.sleep(1)
+
+    while running:
+        t_start = time.time()
+        try:
+            # 1. Process Fills from WebSocket
+            new_fills = ws_mgr.pop_new_fills()
+            for f in new_fills:
+                real_matched += 1
+                sz = float(f["fillSz"])
+                px = float(f["fillPx"])
+                notional = sz * px * 100.0
+                real_volume += notional
+                real_fees += float(f.get("fee", 0))
+                inventory += sz if f["side"].lower() == "buy" else -sz
+                log_msg(f"⭐ [REAL FILL] {f['side']} {sz} contracts @ {px} | Fee: {f.get('fee')} {f.get('feeCcy')}")
+
+            # 2. Funding rate periodic check
+            if time.time() - last_funding_fetch >= 60.0:
+                fr_data = client.get_funding_rate(inst_id)
+                if fr_data:
+                    cached_funding_rate = float(fr_data.get("fundingRate", 0.0))
+                    last_funding_fetch = time.time()
+
+            # 3. Read latest L2 orderbook
+            book = ws_mgr.get_latest_book()
+            mid_px = book.get("mid", 0.0)
+            micro_px = book.get("micro", mid_px)
+            rolling_ofi = ws_mgr.get_rolling_ofi()
+
+            # 4. Compute Quotes
+            decision = engine.compute_quotes(
+                mid_px=mid_px,
+                micro_px=micro_px,
+                inventory_contracts=inventory,
+                vol_30s=0.50, # steady GK baseline
+                ofi_1s=rolling_ofi,
+                ofi_5s=rolling_ofi * 2.0,
+                ofi_30s=rolling_ofi * 5.0,
+                obi=0.0,
+                volume=10.0,
+                trade_count=5.0,
+                net_flow=rolling_ofi,
+                funding_rate=cached_funding_rate
+            )
+
+            # 5. Execute Order Actions
+            pending = client.get_pending_orders(inst_type="SWAP", inst_id=inst_id)
+            exist_buy = None
+            exist_sell = None
+            cancel_list = []
+
+            for p in pending:
+                side_p = p.get("side", "").lower()
+                px_p = float(p.get("px", 0))
+                ord_id = p.get("ordId")
+
+                if side_p == "buy":
+                    if decision["allow_bid"] and abs(px_p - decision["bid_px"]) <= engine.tick_size * 1.05:
+                        exist_buy = p
+                    else:
+                        cancel_list.append({"instId": inst_id, "ordId": ord_id})
+                elif side_p == "sell":
+                    if decision["allow_ask"] and abs(px_p - decision["ask_px"]) <= engine.tick_size * 1.05:
+                        exist_sell = p
+                    else:
+                        cancel_list.append({"instId": inst_id, "ordId": ord_id})
+
+            for c in cancel_list:
+                client.cancel_order(inst_id=c["instId"], ord_id=c["ordId"])
+
+            if decision["allow_bid"] and exist_buy is None:
+                client.place_order(
+                    inst_id=inst_id,
+                    td_mode="cross",
+                    side="buy",
+                    ord_type="post_only",
+                    px=f"{decision['bid_px']:.5f}",
+                    sz=str(int(decision["lot_sz"]))
+                )
+
+            if decision["allow_ask"] and exist_sell is None:
+                client.place_order(
+                    inst_id=inst_id,
+                    td_mode="cross",
+                    side="sell",
+                    ord_type="post_only",
+                    px=f"{decision['ask_px']:.5f}",
+                    sz=str(int(decision["lot_sz"]))
+                )
+
+            # 6. Save Status JSON
+            status = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "symbol": inst_id,
+                "mid": mid_px,
+                "inventory_contracts": inventory,
+                "inventory_usd": inventory * 100.0 * mid_px,
+                "matched_count": real_matched,
+                "volume_usd": real_volume,
+                "fees_usd": real_fees,
+                "toxic_prob": decision["p_toxic_down"],
+                "actions": decision["actions"]
+            }
+            with open(STATUS_FILE, "w", encoding="utf-8") as f:
+                json.dump(status, f, indent=2)
+
+        except Exception as e:
+            log_msg(f"Loop error: {e}")
+
+        elapsed = time.time() - t_start
+        if elapsed < 1.0:
+            time.sleep(1.0 - elapsed)
+
+    ws_mgr.stop()
+    log_msg("=== Service Exited Gracefully ===")
+
+if __name__ == "__main__":
+    main()

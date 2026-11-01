@@ -1,0 +1,111 @@
+{
+  "generated_at": "2026-11-01T06:52:19.912855+00:00",
+  "governance_standard": "MATHEMATICAL_INVARIANTS_V2",
+  "symbols": {
+    "WOO-USDT-SWAP": {
+      "trades": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "WOO-USDT-SWAP",
+        "initial_rows": 1113,
+        "dedup_rows": 1113,
+        "final_rows": 1113,
+        "causality_violations": 0,
+        "min_time_utc": "2026-11-01T04:00:00.541944215+00:00",
+        "max_time_utc": "2026-11-01T05:55:54.828131340+00:00",
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\WOO-USDT-SWAP\\trades_governed.parquet"
+      },
+      "orderbook": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "WOO-USDT-SWAP",
+        "initial_rows": 30210,
+        "final_rows": 30210,
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\WOO-USDT-SWAP\\orderbook_governed.parquet"
+      },
+      "governed_status": "VERIFIED_AVAILABLE"
+    },
+    "CORE-USDT-SWAP": {
+      "trades": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "CORE-USDT-SWAP",
+        "initial_rows": 2702,
+        "dedup_rows": 2702,
+        "final_rows": 2702,
+        "causality_violations": 0,
+        "min_time_utc": "2026-11-01T04:00:17.724606573+00:00",
+        "max_time_utc": "2026-11-01T05:59:04.326586177+00:00",
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\CORE-USDT-SWAP\\trades_governed.parquet"
+      },
+      "orderbook": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "CORE-USDT-SWAP",
+        "initial_rows": 32817,
+        "final_rows": 32817,
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\CORE-USDT-SWAP\\orderbook_governed.parquet"
+      },
+      "governed_status": "VERIFIED_AVAILABLE"
+    },
+    "BERA-USDT-SWAP": {
+      "trades": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "BERA-USDT-SWAP",
+        "initial_rows": 1190,
+        "dedup_rows": 1190,
+        "final_rows": 1190,
+        "causality_violations": 0,
+        "min_time_utc": "2026-11-01T04:00:00.090018464+00:00",
+        "max_time_utc": "2026-11-01T05:57:39.240371159+00:00",
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\BERA-USDT-SWAP\\trades_governed.parquet"
+      },
+      "orderbook": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "BERA-USDT-SWAP",
+        "initial_rows": 23645,
+        "final_rows": 23645,
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\BERA-USDT-SWAP\\orderbook_governed.parquet"
+      },
+      "governed_status": "VERIFIED_AVAILABLE"
+    },
+    "SOPH-USDT-SWAP": {
+      "trades": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "SOPH-USDT-SWAP",
+        "initial_rows": 13410,
+        "dedup_rows": 13410,
+        "final_rows": 13410,
+        "causality_violations": 0,
+        "min_time_utc": "2026-11-01T04:00:00.061772055+00:00",
+        "max_time_utc": "2026-11-01T05:59:53.307628582+00:00",
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\SOPH-USDT-SWAP\\trades_governed.parquet"
+      },
+      "orderbook": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "SOPH-USDT-SWAP",
+        "initial_rows": 229012,
+        "final_rows": 229012,
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\SOPH-USDT-SWAP\\orderbook_governed.parquet"
+      },
+      "governed_status": "VERIFIED_AVAILABLE"
+    },
+    "AKE-USDT-SWAP": {
+      "trades": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "AKE-USDT-SWAP",
+        "initial_rows": 130579,
+        "dedup_rows": 130579,
+        "final_rows": 130579,
+        "causality_violations": 0,
+        "min_time_utc": "2026-11-01T05:00:00.014954388+00:00",
+        "max_time_utc": "2026-11-01T05:59:58.555674596+00:00",
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\AKE-USDT-SWAP\\trades_governed.parquet"
+      },
+      "orderbook": {
+        "status": "VERIFIED_AVAILABLE",
+        "symbol": "AKE-USDT-SWAP",
+        "initial_rows": 505940,
+        "final_rows": 505940,
+        "out_file": "W:/database/02_governed_lake/crypto_hft\\AKE-USDT-SWAP\\orderbook_governed.parquet"
+      },
+      "governed_status": "VERIFIED_AVAILABLE"
+    }
+  }
+}

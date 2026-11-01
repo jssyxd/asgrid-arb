@@ -1,0 +1,44 @@
+{
+  "total_samples": 17505,
+  "cutoff_timestamp_utc": 1793510628,
+  "test_start_timestamp_utc": 1793510748,
+  "train_samples": 11273,
+  "test_samples": 5895,
+  "embargo_seconds": 120,
+  "features": [
+    "spread_bps",
+    "micro_skew",
+    "obi",
+    "ofi_1s",
+    "ofi_5s",
+    "ofi_30s",
+    "vol_30s",
+    "volume",
+    "trade_count",
+    "net_flow"
+  ],
+  "metrics": {
+    "auc_in_sample": 0.8854210725867289,
+    "auc_out_of_sample": 0.8400886238108239,
+    "precision_out_of_sample": 0.822562358276644,
+    "recall_out_of_sample": 0.5180292752588361,
+    "brier_score_out_of_sample": 0.16163388258190242,
+    "drift_rmse_out_of_sample": 0.04957519633038628
+  },
+  "feature_importances": {
+    "spread_bps": 32032.816954135895,
+    "vol_30s": 10374.817745685577,
+    "ofi_30s": 3129.4783844947815,
+    "micro_skew": 2068.105946779251,
+    "ofi_1s": 1839.5177526474,
+    "ofi_5s": 1617.522739648819,
+    "volume": 707.7745990753174,
+    "trade_count": 441.2323188781738,
+    "net_flow": 332.37606954574585,
+    "obi": 305.5835130214691
+  },
+  "model_files": [
+    "W:/database/04_models\\lgbm_toxicity_gate.txt",
+    "W:/database/04_models\\lgbm_price_drift.txt"
+  ]
+}
