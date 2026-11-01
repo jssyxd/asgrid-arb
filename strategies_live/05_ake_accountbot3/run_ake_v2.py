@@ -24,6 +24,7 @@ SHARED_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../shared"))
 REPO_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../.."))
 sys.path.append(SHARED_DIR)
 sys.path.append(REPO_DIR)
+sys.path.append("/opt/nautilus_cluster")
 
 from gateway_okx_client import OKXGatewayClient
 from okx_ws_manager import OKXWebSocketManager
@@ -34,6 +35,8 @@ LOG_DIR = os.path.join(SERVICE_DIR, "logs")
 STATUS_FILE = os.path.join(LOG_DIR, "accountbot3_status.json")
 LOG_FILE = os.path.join(LOG_DIR, "accountbot3_runtime.log")
 MODEL_FILE = os.path.join(REPO_DIR, "models_v2/lgbm_toxicity_gate_AKE.txt")
+if not os.path.exists(MODEL_FILE):
+    MODEL_FILE = "/opt/nautilus_cluster/models_v2/lgbm_toxicity_gate_AKE.txt"
 
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -99,14 +102,12 @@ def main():
     log_msg(f"Starting OKX WebSocket streams for {inst_id}...")
     ws_mgr.start()
 
-    # Initial position sync
     inventory = 0.0
     init_positions = client.get_positions(inst_type="SWAP", inst_id=inst_id)
     if init_positions:
         inventory = float(init_positions[0].get("pos", 0))
         log_msg(f"Synced initial live position: {inventory} contracts")
 
-    # Initialize Quoting Engine
     engine = RobustGLFTQuotingEngine(
         symbol=inst_id,
         tick_size=0.00001,
@@ -130,7 +131,6 @@ def main():
     while running:
         t_start = time.time()
         try:
-            # 1. Process Fills from WebSocket
             new_fills = ws_mgr.pop_new_fills()
             for f in new_fills:
                 real_matched += 1
@@ -142,25 +142,25 @@ def main():
                 inventory += sz if f["side"].lower() == "buy" else -sz
                 log_msg(f"⭐ [REAL FILL] {f['side']} {sz} contracts @ {px} | Fee: {f.get('fee')} {f.get('feeCcy')}")
 
-            # 2. Funding rate periodic check
             if time.time() - last_funding_fetch >= 60.0:
-                fr_data = client.get_funding_rate(inst_id)
-                if fr_data:
-                    cached_funding_rate = float(fr_data.get("fundingRate", 0.0))
-                    last_funding_fetch = time.time()
+                try:
+                    fr_data = client._sign_and_request("GET", "/api/v5/public/funding-rate", params={"instId": inst_id})
+                    if fr_data and "data" in fr_data and fr_data["data"]:
+                        cached_funding_rate = float(fr_data["data"][0].get("fundingRate", 0.0))
+                except Exception:
+                    pass
+                last_funding_fetch = time.time()
 
-            # 3. Read latest L2 orderbook
             book = ws_mgr.get_latest_book()
             mid_px = book.get("mid", 0.0)
             micro_px = book.get("micro", mid_px)
             rolling_ofi = ws_mgr.get_rolling_ofi()
 
-            # 4. Compute Quotes
             decision = engine.compute_quotes(
                 mid_px=mid_px,
                 micro_px=micro_px,
                 inventory_contracts=inventory,
-                vol_30s=0.50, # steady GK baseline
+                vol_30s=0.50,
                 ofi_1s=rolling_ofi,
                 ofi_5s=rolling_ofi * 2.0,
                 ofi_30s=rolling_ofi * 5.0,
@@ -171,7 +171,6 @@ def main():
                 funding_rate=cached_funding_rate
             )
 
-            # 5. Execute Order Actions
             pending = client.get_pending_orders(inst_type="SWAP", inst_id=inst_id)
             exist_buy = None
             exist_sell = None
@@ -216,7 +215,6 @@ def main():
                     sz=str(int(decision["lot_sz"]))
                 )
 
-            # 6. Save Status JSON
             status = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "symbol": inst_id,

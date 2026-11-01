@@ -24,6 +24,7 @@ SHARED_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../shared"))
 REPO_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../.."))
 sys.path.append(SHARED_DIR)
 sys.path.append(REPO_DIR)
+sys.path.append("/opt/nautilus_cluster")
 
 from gateway_okx_client import OKXGatewayClient
 from okx_ws_manager import OKXWebSocketManager
@@ -34,6 +35,8 @@ LOG_DIR = os.path.join(SERVICE_DIR, "logs")
 STATUS_FILE = os.path.join(LOG_DIR, "accountbot5_status.json")
 LOG_FILE = os.path.join(LOG_DIR, "accountbot5_runtime.log")
 MODEL_FILE = os.path.join(REPO_DIR, "models_v2/lgbm_toxicity_gate_CORE.txt")
+if not os.path.exists(MODEL_FILE):
+    MODEL_FILE = "/opt/nautilus_cluster/models_v2/lgbm_toxicity_gate_CORE.txt"
 
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -140,10 +143,13 @@ def main():
                 log_msg(f"⭐ [REAL FILL] {f['side']} {sz} contracts @ {px} | Fee: {f.get('fee')} {f.get('feeCcy')}")
 
             if time.time() - last_funding_fetch >= 60.0:
-                fr_data = client.get_funding_rate(inst_id)
-                if fr_data:
-                    cached_funding_rate = float(fr_data.get("fundingRate", 0.0))
-                    last_funding_fetch = time.time()
+                try:
+                    fr_data = client._sign_and_request("GET", "/api/v5/public/funding-rate", params={"instId": inst_id})
+                    if fr_data and "data" in fr_data and fr_data["data"]:
+                        cached_funding_rate = float(fr_data["data"][0].get("fundingRate", 0.0))
+                except Exception:
+                    pass
+                last_funding_fetch = time.time()
 
             book = ws_mgr.get_latest_book()
             mid_px = book.get("mid", 0.0)
