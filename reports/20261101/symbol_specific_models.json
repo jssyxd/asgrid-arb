@@ -133,5 +133,32 @@
       "volume": 46.052509784698486,
       "micro_skew": 40.70390033721924
     }
+  },
+  "CHZ": {
+    "symbol": "CHZ-USDT-SWAP",
+    "model_file": "W:/database/04_models\\lgbm_toxicity_gate_CHZ.txt",
+    "train_samples": 1279,
+    "test_samples": 510,
+    "auc_out_of_sample": 0.6459980568212276,
+    "precision_out_of_sample": 0.9310344827586207,
+    "recall_out_of_sample": 0.14835164835164835,
+    "brier_score": 0.24281156637250645,
+    "top_features": [
+      "spread_bps",
+      "vol_30s",
+      "ofi_30s"
+    ],
+    "feature_importances_gain": {
+      "spread_bps": 3083.8186917304993,
+      "vol_30s": 1814.5709264278412,
+      "ofi_30s": 726.6456534862518,
+      "ofi_5s": 336.6376008987427,
+      "micro_skew": 304.80058121681213,
+      "ofi_1s": 108.85567903518677,
+      "obi": 91.30467963218689,
+      "volume": 0.0,
+      "trade_count": 0.0,
+      "net_flow": 0.0
+    }
   }
 }
