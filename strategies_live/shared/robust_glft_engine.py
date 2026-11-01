@@ -121,9 +121,10 @@ class RobustGLFTQuotingEngine:
         allow_ask = True
         actions = []
 
-        if p_toxic_down >= self.toxic_threshold:
+        vol_ratio = vol_30s / (vol_median + 1e-6)
+        if p_toxic_down >= self.toxic_threshold or vol_ratio >= 2.2:
             allow_bid = False
-            actions.append(f"TOXIC_DOWN_CUT({p_toxic_down:.2f})")
+            actions.append(f"TOXIC_DOWN_CUT(p={p_toxic_down:.2f}, vol_r={vol_ratio:.1f})")
 
         if inventory_usd >= self.max_notional_usd:
             allow_bid = False
