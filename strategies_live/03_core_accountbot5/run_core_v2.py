@@ -168,7 +168,9 @@ def main():
                 volume=10.0,
                 trade_count=5.0,
                 net_flow=rolling_ofi,
-                funding_rate=cached_funding_rate
+                funding_rate=cached_funding_rate,
+                best_bid=book.get("bid", 0.0),
+                best_ask=book.get("ask", 0.0)
             )
 
             pending = client.get_pending_orders(inst_type="SWAP", inst_id=inst_id)
@@ -196,24 +198,32 @@ def main():
                 client.cancel_order(inst_id=c["instId"], ord_id=c["ordId"])
 
             if decision["allow_bid"] and exist_buy is None:
-                client.place_order(
-                    inst_id=inst_id,
-                    td_mode="cross",
-                    side="buy",
-                    ord_type="post_only",
-                    px=f"{decision['bid_px']:.4f}",
-                    sz=str(int(decision["lot_sz"]))
-                )
+                sz_bid = int(decision["lot_sz"])
+                if inventory < 0:
+                    sz_bid = min(sz_bid, abs(int(inventory)))
+                if sz_bid > 0:
+                    client.place_order(
+                        inst_id=inst_id,
+                        td_mode="cross",
+                        side="buy",
+                        ord_type="post_only",
+                        px=f"{decision['bid_px']:.4f}",
+                        sz=str(sz_bid)
+                    )
 
             if decision["allow_ask"] and exist_sell is None:
-                client.place_order(
-                    inst_id=inst_id,
-                    td_mode="cross",
-                    side="sell",
-                    ord_type="post_only",
-                    px=f"{decision['ask_px']:.4f}",
-                    sz=str(int(decision["lot_sz"]))
-                )
+                sz_ask = int(decision["lot_sz"])
+                if inventory > 0:
+                    sz_ask = min(sz_ask, int(inventory))
+                if sz_ask > 0:
+                    client.place_order(
+                        inst_id=inst_id,
+                        td_mode="cross",
+                        side="sell",
+                        ord_type="post_only",
+                        px=f"{decision['ask_px']:.4f}",
+                        sz=str(sz_ask)
+                    )
 
             status = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),

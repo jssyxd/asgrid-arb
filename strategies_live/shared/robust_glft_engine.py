@@ -109,11 +109,14 @@ class RobustGLFTQuotingEngine:
 
         calc_bid = res_price - base_half_spd
         if inventory_usd > 0 and best_ask > 0:
-            # Inside-ask inventory exit clamping: accelerates de-inventorying without sacrificing spread
+            # Long inventory: clamp ask inside to accelerate selling
             calc_ask = max(min(res_price + base_half_spd, best_ask), mid_px + self.tick_size)
         else:
             calc_ask = res_price + base_half_spd
 
+        if inventory_usd < 0 and best_bid > 0:
+            # Short inventory: clamp bid inside to accelerate buying to cover & lock profit!
+            calc_bid = min(max(res_price - base_half_spd, best_bid), mid_px - self.tick_size)
         # Strict Post-Only bounds: never cross market
         calc_bid = min(calc_bid, mid_px - self.tick_size)
         calc_ask = max(calc_ask, mid_px + self.tick_size)
@@ -128,10 +131,14 @@ class RobustGLFTQuotingEngine:
         actions = []
 
         vol_ratio = vol_30s / (vol_median + 1e-6)
+        # CRITICAL FIX: TOXIC_DOWN_CUT must only block OPENING NEW LONGS!
+        # When holding SHORT (inventory_usd < 0), buying is BUY TO COVER (take-profit), which must be allowed!
         if p_toxic_down >= self.toxic_threshold or vol_ratio >= 2.2:
-            allow_bid = False
-            actions.append(f"TOXIC_DOWN_CUT(p={p_toxic_down:.2f}, vol_r={vol_ratio:.1f})")
-
+            if inventory_usd >= 0:
+                allow_bid = False
+                actions.append(f"TOXIC_DOWN_CUT(p={p_toxic_down:.2f}, vol_r={vol_ratio:.1f})")
+            else:
+                actions.append(f"TOXIC_DOWN_COVER_ALLOWED(p={p_toxic_down:.2f})")
         # Single-Lot Ping-Pong Liquidity Discipline (Proven by Autoresearch: Sharpe 61.66, MaxDD 0.38%)
         # Stop adding in the same direction once holding >= 1 single order lot ($10 USD)
         single_lot_threshold = self.target_notional_usd * 0.85
