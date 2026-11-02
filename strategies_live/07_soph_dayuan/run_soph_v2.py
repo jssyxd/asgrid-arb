@@ -19,13 +19,21 @@ import signal
 import numpy as np
 from datetime import datetime, timezone
 
+import os
+import sys
+import time
+import json
+import signal
+import numpy as np
+from datetime import datetime, timezone
+
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../shared"))
 REPO_DIR = os.path.abspath(os.path.join(SERVICE_DIR, "../.."))
-sys.path.append(SHARED_DIR)
-sys.path.append(REPO_DIR)
-sys.path.append("/opt/nautilus_cluster")
-
+sys.path.insert(0, SHARED_DIR)
+sys.path.insert(0, REPO_DIR)
+sys.path.insert(0, "/opt/nautilus_cluster/shared")
+sys.path.insert(0, "/opt/nautilus_cluster")
 from gateway_okx_client import OKXGatewayClient
 from okx_ws_manager import OKXWebSocketManager
 from robust_glft_engine import RobustGLFTQuotingEngine
