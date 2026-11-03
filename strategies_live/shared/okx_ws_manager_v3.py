@@ -50,8 +50,8 @@ class OKXWebSocketManager:
         self.mid_price = 0.0
         self.micro_price = 0.0
         self.last_book_time = 0.0
-
-        # OFI
+        self.top5_bids = []
+        self.top5_asks = []
         self.prev_b1 = 0.0
         self.prev_v_b1 = 0.0
         self.prev_a1 = 0.0
@@ -195,6 +195,8 @@ class OKXWebSocketManager:
             self.last_book_time = now
             self.prev_b1 = b1; self.prev_v_b1 = v_b1
             self.prev_a1 = a1; self.prev_v_a1 = v_a1
+            self.top5_bids = [(float(x[0]), float(x[1])) for x in bids[:5]]
+            self.top5_asks = [(float(x[0]), float(x[1])) for x in asks[:5]]
             self.recent_ofi_window.append((now, tick_ofi))
             cutoff = now - 15.0
             self.recent_ofi_window = [(t, v) for (t, v) in self.recent_ofi_window if t >= cutoff]
@@ -266,11 +268,17 @@ class OKXWebSocketManager:
                             self.total_equity_usd = float(d.get("eq", 0))
                             self.available_margin_usd = float(d.get("availBal", d.get("cashBal", 0)))
 
-    def get_latest_book(self) -> Dict[str, float]:
+    def get_latest_book(self) -> Dict[str, Any]:
         with self.lock:
-            return {"bid": self.best_bid, "ask": self.best_ask, "mid": self.mid_price,
-                    "micro": self.micro_price, "time": self.last_book_time}
-
+            return {
+                "bid": self.best_bid,
+                "ask": self.best_ask,
+                "mid": self.mid_price,
+                "micro": self.micro_price,
+                "time": self.last_book_time,
+                "bids": list(self.top5_bids),
+                "asks": list(self.top5_asks)
+            }
     def get_rolling_ofi(self) -> float:
         with self.lock:
             return sum(v for (_, v) in self.recent_ofi_window) if self.recent_ofi_window else 0.0

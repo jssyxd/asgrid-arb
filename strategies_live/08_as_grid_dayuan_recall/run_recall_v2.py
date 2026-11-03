@@ -119,15 +119,17 @@ def main():
         min_spread_bps=float(creds.get("MIN_SPREAD_BPS", 14.0)),
         target_notional_usd=float(creds.get("TARGET_NOTIONAL_USD", 10.0)),
         max_notional_usd=float(creds.get("MAX_NOTIONAL_USD", 45.0)),
-        toxic_threshold=0.65
+        toxic_threshold=0.65,
+        min_depth_usd=float(creds.get("MIN_DEPTH_USD", 1500.0)),
+        panic_depth_usd=float(creds.get("PANIC_DEPTH_USD", 500.0))
     )
 
     real_matched = 0
     real_volume = 0.0
     real_fees = 0.0
     cached_funding_rate = 0.0
+    cached_vol_sec = 0.0
     last_funding_fetch = 0.0
-
     time.sleep(1)
 
     while running:
@@ -149,6 +151,10 @@ def main():
                     fr_data = client._sign_and_request("GET", "/api/v5/public/funding-rate", params={"instId": inst_id})
                     if fr_data and "data" in fr_data and fr_data["data"]:
                         cached_funding_rate = float(fr_data["data"][0].get("fundingRate", 0.0))
+                    tk_data = client._sign_and_request("GET", "/api/v5/market/ticker", params={"instId": inst_id})
+                    if tk_data and "data" in tk_data and tk_data["data"]:
+                        vol24h = float(tk_data["data"][0].get("volCcy24h", 0.0))
+                        cached_vol_sec = vol24h / 86400.0
                 except Exception:
                     pass
                 last_funding_fetch = time.time()
@@ -157,6 +163,16 @@ def main():
             mid_px = book.get("mid", 0.0)
             micro_px = book.get("micro", mid_px)
             rolling_ofi = ws_mgr.get_rolling_ofi()
+
+            bids_raw = book.get("bids", [])
+            asks_raw = book.get("asks", [])
+            depth_eval = engine.depth_sentinel.evaluate_depth_from_book(
+                bids=bids_raw,
+                asks=asks_raw,
+                contract_val=engine.contract_val
+            )
+            top5_bid_usd = depth_eval.get("bid_depth_usd", 0.0)
+            top5_ask_usd = depth_eval.get("ask_depth_usd", 0.0)
 
             decision = engine.compute_quotes(
                 mid_px=mid_px,
@@ -172,7 +188,10 @@ def main():
                 net_flow=rolling_ofi,
                 funding_rate=cached_funding_rate,
                 best_bid=book.get("bid", 0.0),
-                best_ask=book.get("ask", 0.0)
+                best_ask=book.get("ask", 0.0),
+                top5_bid_depth_usd=top5_bid_usd,
+                top5_ask_depth_usd=top5_ask_usd,
+                avg_vol_4h_sec=cached_vol_sec
             )
 
             pending = client.get_pending_orders(inst_type="SWAP", inst_id=inst_id)
@@ -237,6 +256,9 @@ def main():
                 "volume_usd": real_volume,
                 "fees_usd": real_fees,
                 "toxic_prob": decision["p_toxic_down"],
+                "depth_gate": decision.get("depth_gate"),
+                "top5_bid_usd": top5_bid_usd,
+                "top5_ask_usd": top5_ask_usd,
                 "actions": decision["actions"]
             }
             with open(STATUS_FILE, "w", encoding="utf-8") as f:

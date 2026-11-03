@@ -8,6 +8,14 @@ import os
 import math
 import numpy as np
 
+try:
+    from depth_sentinel import OrderBookDepthSentinel
+except ImportError:
+    try:
+        from .depth_sentinel import OrderBookDepthSentinel
+    except Exception:
+        from strategies_live.shared.depth_sentinel import OrderBookDepthSentinel
+
 class RobustGLFTQuotingEngine:
     def __init__(
         self,
@@ -21,7 +29,9 @@ class RobustGLFTQuotingEngine:
         k_decay: float = 2.1346,
         target_notional_usd: float = 10.0,
         max_notional_usd: float = 45.0,
-        toxic_threshold: float = 0.65
+        toxic_threshold: float = 0.65,
+        min_depth_usd: float = 1500.0,
+        panic_depth_usd: float = 500.0
     ):
         self.symbol = symbol
         self.tick_size = tick_size
@@ -33,10 +43,15 @@ class RobustGLFTQuotingEngine:
         self.target_notional_usd = target_notional_usd
         self.max_notional_usd = max_notional_usd
         self.toxic_threshold = toxic_threshold
+        self.min_depth_usd = min_depth_usd
+        self.panic_depth_usd = panic_depth_usd
+        self.depth_sentinel = OrderBookDepthSentinel(
+            min_depth_usd=min_depth_usd,
+            panic_depth_usd=panic_depth_usd
+        )
 
         self.last_bid_price = None
         self.last_ask_price = None
-
         # Load LightGBM model if provided
         self.bst = None
         if model_path and os.path.exists(model_path):
@@ -62,13 +77,28 @@ class RobustGLFTQuotingEngine:
          funding_rate: float = 0.0,
          vol_median: float = 0.50,
          best_bid: float = 0.0,
-         best_ask: float = 0.0
+         best_ask: float = 0.0,
+         top5_bid_depth_usd: float = None,
+         top5_ask_depth_usd: float = None,
+         avg_vol_4h_sec: float = 0.0
      ) -> dict:
         """
         Computes optimal Maker bid/ask quotes with toxicity cutoff and queue holding.
         """
         if mid_px <= 0:
             return {"allow_bid": False, "allow_ask": False, "actions": ["MID_INVALID"]}
+
+        # 0. Microstructure OrderBook Depth Gatekeeper (Pre-trade Liquidity Sentinel)
+        inventory_usd = inventory_contracts * self.contract_val * mid_px
+        depth_gate = None
+        if top5_bid_depth_usd is not None and top5_ask_depth_usd is not None:
+            depth_gate = self.depth_sentinel.check_liquidity_gate(
+                bid_depth_usd=top5_bid_depth_usd,
+                ask_depth_usd=top5_ask_depth_usd,
+                inventory_usd=inventory_usd,
+                mid_px=mid_px,
+                avg_vol_4h_sec=avg_vol_4h_sec
+            )
 
         # Dynamic Spread Scaling: verified by autoresearch (Sharpe 74.94, MaxDD 0.38%)
         # Base spread multiplier 1.20x + smooth volatility scaling (0.30 slope, 1.0x to 1.5x cap)
@@ -149,6 +179,12 @@ class RobustGLFTQuotingEngine:
             allow_ask = False
             actions.append(f"INVENTORY_SHORT_LOCK({inventory_usd:.2f})")
 
+        # 4.1 OrderBook Depth Sentinel Gate Enforcement
+        if depth_gate is not None and not depth_gate.get("allow_quote", True):
+            allow_bid = False
+            allow_ask = False
+            actions.append(f"DEPTH_GATE_HALT({depth_gate.get('action')}: {depth_gate.get('reason')})")
+
         # 5. Queue Priority Holding (1.05 tick deadband)
         if allow_bid and self.last_bid_price is not None:
             if abs(calc_bid - self.last_bid_price) <= self.tick_size * 1.05:
@@ -181,5 +217,6 @@ class RobustGLFTQuotingEngine:
             "allow_bid": allow_bid,
             "allow_ask": allow_ask,
             "p_toxic_down": p_toxic_down,
+            "depth_gate": depth_gate,
             "actions": actions
         }
