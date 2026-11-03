@@ -179,12 +179,31 @@ class RobustGLFTQuotingEngine:
             allow_ask = False
             actions.append(f"INVENTORY_SHORT_LOCK({inventory_usd:.2f})")
 
-        # 4.1 OrderBook Depth Sentinel Gate Enforcement
+        # 4.1 OrderBook Depth Sentinel Gate Enforcement & Soft Inventory Exit
         if depth_gate is not None and not depth_gate.get("allow_quote", True):
-            allow_bid = False
-            allow_ask = False
-            actions.append(f"DEPTH_GATE_HALT({depth_gate.get('action')}: {depth_gate.get('reason')})")
+            action_type = depth_gate.get("action")
+            allow_soft_close = depth_gate.get("allow_soft_close", False)
 
+            if action_type == "PANIC_DRAIN_SHUTDOWN" or not allow_soft_close:
+                # 1. 纳秒级全信号拦截 (Hard shutdown: empty book, crossed book, or panic drain < $500)
+                allow_bid = False
+                allow_ask = False
+                actions.append(f"DEPTH_PANIC_SHUTDOWN: {depth_gate.get('reason')}")
+            elif action_type == "DEPTH_INSUFFICIENT_HALT":
+                # 2. 存量库存软出清 (Soft inventory exit: Post-Only reduce-only, never take market order)
+                if inventory_usd > 0.5:
+                    # Holding long: Block new buys, allow post-only ask to sell/reduce inventory
+                    allow_bid = False
+                    actions.append(f"DEPTH_INSUFFICIENT_SOFT_EXIT(Long ${inventory_usd:.2f}: Ask allowed to reduce, Bid blocked)")
+                elif inventory_usd < -0.5:
+                    # Holding short: Block new sells, allow post-only bid to buy-to-cover
+                    allow_ask = False
+                    actions.append(f"DEPTH_INSUFFICIENT_SOFT_EXIT(Short ${inventory_usd:.2f}: Bid allowed to cover, Ask blocked)")
+                else:
+                    # Flat inventory: Zero reason to quote, block both sides
+                    allow_bid = False
+                    allow_ask = False
+                    actions.append(f"DEPTH_GATE_HALT(Flat inventory & depth insufficient: {depth_gate.get('reason')})")
         # 5. Queue Priority Holding (1.05 tick deadband)
         if allow_bid and self.last_bid_price is not None:
             if abs(calc_bid - self.last_bid_price) <= self.tick_size * 1.05:

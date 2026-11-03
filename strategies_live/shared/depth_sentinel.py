@@ -77,7 +77,8 @@ class OrderBookDepthSentinel:
         ask_depth_usd: float,
         inventory_usd: float,
         mid_px: float = 0.0,
-        avg_vol_4h_sec: float = 0.0
+        avg_vol_4h_sec: float = 0.0,
+        is_crossed: bool = False
     ) -> Dict[str, Any]:
         """
         Gatekeeper check:
@@ -95,23 +96,36 @@ class OrderBookDepthSentinel:
             abs_inv_usd * self.inventory_depth_ratio,
             avg_vol_4h_sec * 15.0
         )
+        # Case 0: Crossed Book Anomaly
+        if is_crossed:
+            return {
+                "allow_quote": False,
+                "allow_open": False,
+                "allow_soft_close": False,
+                "action": "PANIC_DRAIN_SHUTDOWN",
+                "required_depth_usd": round(required_depth, 2),
+                "current_min_depth_usd": round(min_side, 2),
+                "reason": "Crossed order book anomaly detected (best_bid >= best_ask)"
+            }
 
         # Case 1: Extreme Liquidity Drain / Vacuum
         if min_side < self.panic_depth_usd:
             return {
                 "allow_quote": False,
                 "allow_open": False,
+                "allow_soft_close": False,
                 "action": "PANIC_DRAIN_SHUTDOWN",
                 "required_depth_usd": round(required_depth, 2),
                 "current_min_depth_usd": round(min_side, 2),
                 "reason": f"Depth collapsed below emergency panic floor (${min_side:.1f} < ${self.panic_depth_usd:.1f})"
             }
 
-        # Case 2: Insufficient Depth for safe market making
+        # Case 2: Insufficient Depth for safe market making (Allows Soft Close Only)
         if min_side < required_depth:
             return {
                 "allow_quote": False,
                 "allow_open": False,
+                "allow_soft_close": True,
                 "action": "DEPTH_INSUFFICIENT_HALT",
                 "required_depth_usd": round(required_depth, 2),
                 "current_min_depth_usd": round(min_side, 2),
@@ -122,6 +136,7 @@ class OrderBookDepthSentinel:
         return {
             "allow_quote": True,
             "allow_open": True,
+            "allow_soft_close": True,
             "action": "HEALTHY",
             "required_depth_usd": round(required_depth, 2),
             "current_min_depth_usd": round(min_side, 2),

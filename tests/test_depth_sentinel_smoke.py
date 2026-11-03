@@ -143,5 +143,57 @@ class TestOrderBookDepthSentinel(unittest.TestCase):
         eval_res = self.sentinel.evaluate_depth_from_book(bids, asks, contract_val=10.0)
         self.assertTrue(eval_res["is_crossed"])
         self.assertEqual(eval_res["min_side_usd"], 0.0)
+
+    def test_soft_exit_holding_long_allows_ask_blocks_bid(self):
+        # Depth $1,000 is between $500 panic and $1,500 hurdle
+        # Holding long inventory: 1 contract * 10 ctVal * 1.0 px = $10 USD
+        res = self.engine.compute_quotes(
+            mid_px=1.0,
+            micro_px=1.0,
+            inventory_contracts=1.0,
+            vol_30s=0.50,
+            ofi_1s=0.0, ofi_5s=0.0, ofi_30s=0.0, obi=0.0,
+            volume=10.0, trade_count=5.0, net_flow=0.0,
+            best_bid=0.9999, best_ask=1.0001,
+            top5_bid_depth_usd=1000.0,
+            top5_ask_depth_usd=1000.0
+        )
+        self.assertFalse(res["allow_bid"]) # Block new buys
+        self.assertTrue(res["allow_ask"])  # Allow post-only ask to sell/reduce inventory
+        self.assertTrue(any("SOFT_EXIT" in a for a in res["actions"]))
+
+    def test_soft_exit_holding_short_allows_bid_blocks_ask(self):
+        # Holding short inventory: -1 contract = -$10 USD
+        res = self.engine.compute_quotes(
+            mid_px=1.0,
+            micro_px=1.0,
+            inventory_contracts=-1.0,
+            vol_30s=0.50,
+            ofi_1s=0.0, ofi_5s=0.0, ofi_30s=0.0, obi=0.0,
+            volume=10.0, trade_count=5.0, net_flow=0.0,
+            best_bid=0.9999, best_ask=1.0001,
+            top5_bid_depth_usd=1000.0,
+            top5_ask_depth_usd=1000.0
+        )
+        self.assertTrue(res["allow_bid"])   # Allow post-only bid to buy-to-cover
+        self.assertFalse(res["allow_ask"])  # Block new sells
+        self.assertTrue(any("SOFT_EXIT" in a for a in res["actions"]))
+
+    def test_panic_drain_blocks_all_even_with_inventory(self):
+        # Depth collapses to $300 (< $500 floor), holding +$10 USD
+        res = self.engine.compute_quotes(
+            mid_px=1.0,
+            micro_px=1.0,
+            inventory_contracts=1.0,
+            vol_30s=0.50,
+            ofi_1s=0.0, ofi_5s=0.0, ofi_30s=0.0, obi=0.0,
+            volume=10.0, trade_count=5.0, net_flow=0.0,
+            top5_bid_depth_usd=300.0,
+            top5_ask_depth_usd=300.0
+        )
+        self.assertFalse(res["allow_bid"])
+        self.assertFalse(res["allow_ask"])
+        self.assertTrue(any("DEPTH_PANIC_SHUTDOWN" in a for a in res["actions"]))
+
 if __name__ == "__main__":
     unittest.main()

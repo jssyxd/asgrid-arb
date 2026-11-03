@@ -31,7 +31,7 @@ sys.path.append(SHARED_DIR)
 
 from gateway_okx_client import OKXGatewayClient
 from okx_ws_manager_v3 import OKXWebSocketManager
-
+from depth_sentinel import OrderBookDepthSentinel
 CONFIG_FILE = os.path.join(SERVICE_DIR, "config/accountbot4_credentials.env")
 LOG_DIR = os.path.join(SERVICE_DIR, "logs")
 STATUS_FILE = os.path.join(LOG_DIR, "accountbot4_status.json")
@@ -118,7 +118,10 @@ def main():
     gamma_calm = float(creds.get("GAMMA_CALM", 0.35))
     gamma_vol = float(creds.get("GAMMA_VOL", 1.2))
     price_tol = float(creds.get("PRICE_TOLERANCE", 2e-05))
-    
+    sentinel = OrderBookDepthSentinel(
+        min_depth_usd=float(creds.get("MIN_DEPTH_USD", 1500.0)),
+        panic_depth_usd=float(creds.get("PANIC_DEPTH_USD", 500.0))
+    )
     # State
     inventory = 0.0
     init_positions = client.get_positions(inst_type="SWAP", inst_id=inst_id)
@@ -132,8 +135,8 @@ def main():
     cached_ma_dev = 0.0
     vol_median = 0.55
     cached_funding_rate = 0.0
+    cached_vol_sec = 0.0
     last_funding_fetch = 0.0
-    
     last_fill_time_bid = 0.0
     last_fill_time_ask = 0.0
     FILL_COOLDOWN_SEC = 5.0
@@ -172,11 +175,17 @@ def main():
             
             # 2. Funding rate periodic fetch
             if time.time() - last_funding_fetch >= 60.0:
-                fr_data = client.get_funding_rate(inst_id)
-                if fr_data:
-                    cached_funding_rate = float(fr_data.get("fundingRate", 0.0))
-                    last_funding_fetch = time.time()
-
+                try:
+                    fr_data = client.get_funding_rate(inst_id)
+                    if fr_data:
+                        cached_funding_rate = float(fr_data.get("fundingRate", 0.0))
+                    tk_data = client._sign_and_request("GET", "/api/v5/market/ticker", params={"instId": inst_id})
+                    if tk_data and "data" in tk_data and tk_data["data"]:
+                        vol24h = float(tk_data["data"][0].get("volCcy24h", 0.0))
+                        cached_vol_sec = vol24h / 86400.0
+                except Exception:
+                    pass
+                last_funding_fetch = time.time()
             # 3. Streaming 1m candles
             stream_candles = ws_mgr.get_streaming_candles()
             if len(stream_candles) >= 10:
@@ -193,8 +202,25 @@ def main():
             
             rolling_ofi = ws_mgr.get_rolling_ofi()
             ofi_norm = np.clip(rolling_ofi / 50.0, -3.0, 3.0)
-            
-            # 5. Pricing Engine
+
+            # Microstructure Depth Gatekeeper
+            bids_raw = book.get("bids", [])
+            asks_raw = book.get("asks", [])
+            depth_eval = sentinel.evaluate_depth_from_book(
+                bids=bids_raw,
+                asks=asks_raw,
+                contract_val=10.0
+            )
+            top5_bid_usd = depth_eval.get("bid_depth_usd", 0.0)
+            top5_ask_usd = depth_eval.get("ask_depth_usd", 0.0)
+            depth_gate = sentinel.check_liquidity_gate(
+                bid_depth_usd=top5_bid_usd,
+                ask_depth_usd=top5_ask_usd,
+                inventory_usd=inventory * 10.0 * mid_px,
+                mid_px=mid_px,
+                avg_vol_4h_sec=cached_vol_sec,
+                is_crossed=depth_eval.get("is_crossed", False)
+            )
             gamma = gamma_vol if cached_gk > (vol_median * 1.5) else gamma_calm
             base_half_spd = max(mid_px * (min_spread_bps * 0.5 / 10000.0), (1.0 / gamma) * math.log(1.0 + gamma / 2.1346) * (mid_px * 0.0004))
             
@@ -215,10 +241,25 @@ def main():
             # Strict Post-Only Clamp: NEVER cross market
             calc_bid = min(calc_bid, round(mid_px - base_half_spd * 0.5, 5))
             calc_ask = max(calc_ask, round(mid_px + base_half_spd * 0.5, 5))
-            
             allow_bid = (inventory < max_inv) and not cd_bid
             allow_ask = (inventory > -max_inv) and not cd_ask
-            
+
+            # Depth Gate Enforcement & Soft Exit
+            if depth_gate and not depth_gate.get("allow_quote", True):
+                action_type = depth_gate.get("action")
+                allow_soft_close = depth_gate.get("allow_soft_close", False)
+                if action_type == "PANIC_DRAIN_SHUTDOWN" or not allow_soft_close:
+                    allow_bid = False
+                    allow_ask = False
+                elif action_type == "DEPTH_INSUFFICIENT_HALT":
+                    inv_usd = inventory * 10.0 * mid_px
+                    if inv_usd > 0.5:
+                        allow_bid = False
+                    elif inv_usd < -0.5:
+                        allow_ask = False
+                    else:
+                        allow_bid = False
+                        allow_ask = False
             # 6. Order Management with Queue Priority Hold
             pending = client.get_pending_orders(inst_type="SWAP", inst_id=inst_id)
             exist_buy = None
@@ -242,9 +283,7 @@ def main():
                         cancel_list.append({"instId": inst_id, "ordId": ord_id})
             
             if cancel_list:
-                for item in cancel_list:
-                    client.cancel_order(inst_id=item["instId"], ord_id=item["ordId"])
-                    
+                client.cancel_batch_orders(cancel_list)
             actions = []
             if allow_bid:
                 if exist_buy is None:
@@ -299,6 +338,9 @@ def main():
                 "gamma": gamma,
                 "real_matched": real_matched,
                 "real_volume_usd": real_volume,
+                "top5_bid_usd": top5_bid_usd,
+                "top5_ask_usd": top5_ask_usd,
+                "depth_gate": depth_gate,
                 "actions": actions
             }
             with open(STATUS_FILE, "w", encoding="utf-8") as f:

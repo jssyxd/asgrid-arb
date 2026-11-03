@@ -215,8 +215,8 @@ def main():
                     else:
                         cancel_list.append({"instId": inst_id, "ordId": ord_id})
 
-            for c in cancel_list:
-                client.cancel_order(inst_id=c["instId"], ord_id=c["ordId"])
+            if cancel_list:
+                client.cancel_batch_orders(cancel_list)
 
             if decision["allow_bid"] and exist_buy is None:
                 sz_bid = int(decision["lot_sz"])
