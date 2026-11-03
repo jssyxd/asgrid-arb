@@ -181,8 +181,9 @@ def main():
                         cached_funding_rate = float(fr_data.get("fundingRate", 0.0))
                     tk_data = client._sign_and_request("GET", "/api/v5/market/ticker", params={"instId": inst_id})
                     if tk_data and "data" in tk_data and tk_data["data"]:
-                        vol24h = float(tk_data["data"][0].get("volCcy24h", 0.0))
-                        cached_vol_sec = vol24h / 86400.0
+                        vol24h_base = float(tk_data["data"][0].get("volCcy24h", 0.0))
+                        last_px = float(tk_data["data"][0].get("last", 0.0))
+                        cached_vol_sec = (vol24h_base * last_px) / 86400.0
                 except Exception:
                     pass
                 last_funding_fetch = time.time()
